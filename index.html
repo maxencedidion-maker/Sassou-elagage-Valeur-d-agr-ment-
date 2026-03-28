@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Sassou Élagage</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- Email -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<!-- Carte -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body{font-family:Arial;margin:0;background:#f4f6f5}
+header{text-align:center;background:white;padding:10px;border-bottom:2px solid #4CAF50}
+.container{padding:15px}
+input,select,button,textarea{width:100%;padding:12px;margin:6px 0}
+button{background:#4CAF50;color:white;border:none}
+#map{height:300px;margin-top:10px}
+.result{background:white;padding:15px;text-align:center;margin-top:10px;font-size:20px}
+canvas{width:100%;height:150px;border:1px solid #ccc;background:white}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>SASSOU ÉLAGAGE</h2>
+</header>
+
+<div class="container">
+
+<h3>Client</h3>
+<input id="client" placeholder="Nom client">
+<input id="emailClient" type="email" placeholder="Email client">
+<input id="adresse" placeholder="Adresse">
+<button onclick="localiser()">Placer sur carte</button>
+
+<div id="map"></div>
+
+<h3>Arbre</h3>
+<input id="diametre" type="number" placeholder="Diamètre">
+<input id="vu" type="number" placeholder="Valeur unitaire">
+<input id="espece" placeholder="Espèce (chêne, hêtre...)">
+
+<select id="ce">
+<option value="1">Standard</option>
+<option value="1.2">Intéressante</option>
+<option value="1.5">Remarquable</option>
+</select>
+
+<select id="cs">
+<option value="0.5">Mauvais</option>
+<option value="0.8">Moyen</option>
+<option value="1">Bon</option>
+</select>
+
+<select id="cl">
+<option value="0.7">Peu visible</option>
+<option value="1">Visible</option>
+<option value="1.5">Remarquable</option>
+</select>
+
+<h3>Dégâts humains</h3>
+<select id="degats">
+<option value="Non">Non</option>
+<option value="Oui">Oui</option>
+</select>
+
+<textarea id="desc" placeholder="Description dégâts"></textarea>
+
+<h3>Photos dégâts</h3>
+<input type="file" id="photos" multiple>
+
+<h3>Signature</h3>
+<canvas id="signature"></canvas>
+<button onclick="clearSig()">Effacer signature</button>
+
+<button onclick="calcul()">Calculer</button>
+<button onclick="envoyer()">Envoyer par email</button>
+<button onclick="pdf()">PDF</button>
+
+<div class="result" id="result">Valeur : 0 €</div>
+
+</div>
+
+<script>
+// EMAILJS INIT
+emailjs.init({publicKey:"EanO7ShNcITXztVUb"});
+
+// CARTE
+let map = L.map('map').setView([46.6,2],6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let marker;
+
+async function localiser(){
+let adr = adresse.value;
+let res = await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+adr);
+let data = await res.json();
+if(data.length){
+let lat = data[0].lat;
+let lon = data[0].lon;
+map.setView([lat,lon],17);
+if(marker) map.removeLayer(marker);
+marker = L.marker([lat,lon]).addTo(map).bindPopup("Fiche arbre");
+}
+}
+
+// SIGNATURE
+let canvas = document.getElementById("signature");
+let ctx = canvas.getContext("2d");
+let draw=false;
+
+canvas.onmousedown=()=>draw=true;
+canvas.onmouseup=()=>draw=false;
+canvas.onmousemove=(e)=>{
+if(!draw) return;
+ctx.lineTo(e.offsetX,e.offsetY);
+ctx.stroke();
+};
+
+function clearSig(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+// CALCUL
+let valeurGlobale=0;
+
+function calcul(){
+let d=diametre.value;
+let vuVal=vu.value;
+let surface=Math.PI*Math.pow(d/2,2);
+valeurGlobale=Math.round(surface*vuVal*ce.value*cs.value*cl.value);
+result.innerHTML="Valeur : "+valeurGlobale+" €";
+}
+
+// EMAIL
+async function envoyer(){
+calcul();
+
+let params={
+to_email:emailClient.value,
+client:client.value,
+adresse:adresse.value,
+espece:espece.value,
+diametre:diametre.value,
+valeur:valeurGlobale+" €",
+degats:degats.value,
+description_degats:desc.value,
+email_client:emailClient.value
+};
+
+await emailjs.send("service_ba9n5xg","template_abl2oy6",params);
+
+// copie pour toi
+await emailjs.send("service_ba9n5xg","template_abl2oy6",{...params,to_email:"arboryx1@gmail.com"});
+
+alert("Email envoyé !");
+}
+
+// PDF
+function pdf(){
+const { jsPDF } = window.jspdf;
+let doc = new jsPDF();
+doc.text("Client : "+client.value,10,20);
+doc.text("Adresse : "+adresse.value,10,30);
+doc.text("Valeur : "+valeurGlobale+" €",10,40);
+doc.save("fiche.pdf");
+}
+</script>
+
+</body>
+</html>
